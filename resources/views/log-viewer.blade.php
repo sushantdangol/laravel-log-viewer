@@ -410,17 +410,11 @@
                             </div>
                         @endif
                     </div>
-                @elseif(request()->isMethod('post'))
+                @else
                     <div class="bg-white rounded-lg shadow-md p-6 text-center">
                         <i class="fas fa-file-alt text-gray-400 text-5xl mb-4"></i>
                         <h3 class="text-lg font-medium text-gray-900 mb-2">No log entries found</h3>
-                        <p class="text-gray-500">The uploaded log file doesn't contain any parsable entries or is empty.</p>
-                    </div>
-                @else
-                    <div class="bg-white rounded-lg shadow-md p-6 text-center">
-                        <i class="fas fa-upload text-gray-400 text-5xl mb-4"></i>
-                        <h3 class="text-lg font-medium text-gray-900 mb-2">Upload or Select a Log File</h3>
-                        <p class="text-gray-500">Choose a .log file from your Laravel app or upload a new one to view its content.</p>
+                        <p class="text-gray-500">The log file doesn't contain any parsable entries or is empty.</p>
                     </div>
                 @endif
             </div>
