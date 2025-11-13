@@ -15,6 +15,7 @@ class LogViewerController extends Controller
      */
     public function show(Request $request)
     {
+        // Reset session if different file or cleared
         if ($request->has('file') && session('remote_log_url') !== $request->get('file')) {
             session()->forget(['remote_log_url', 'remote_log_temp_path']);
         }
@@ -22,6 +23,7 @@ class LogViewerController extends Controller
         $filePath = $request->get('file');
         $page = $request->get('page', 1);
         $perPage = 10;
+        $search = trim($request->get('search', '')); // ✅ new search parameter
         $logs = [];
         $paginator = null;
         $filename = null;
@@ -29,14 +31,16 @@ class LogViewerController extends Controller
         $projects = Project::get();
 
         if (!$filePath) {
-            return view('log-viewer', compact('logs', 'paginator', 'filename', 'projects'));
+            return view('log-viewer', compact('logs', 'paginator', 'filename', 'projects', 'search'));
         }
 
+        // Local file
         if (Storage::exists($filePath)) {
-            $result = $this->parseLogStream(Storage::path($filePath), $page, $perPage);
+            $result = $this->parseLogStream(Storage::path($filePath), $page, $perPage, $search);
             $filename = basename($filePath);
         }
 
+        // Remote file
         elseif (filter_var($filePath, FILTER_VALIDATE_URL)) {
             $cachedPath = session('remote_log_temp_path');
 
@@ -55,12 +59,13 @@ class LogViewerController extends Controller
                 ]);
             }
 
-            $result = $this->parseLogStream($tempFile, $page, $perPage);
+            $result = $this->parseLogStream($tempFile, $page, $perPage, $search);
             $filename = 'Remote: ' . $filePath;
         } else {
             return back()->with('error', 'Invalid log file path.');
         }
 
+        // Pagination
         $paginator = new LengthAwarePaginator(
             $result['logs'],
             $result['total'],
@@ -73,7 +78,8 @@ class LogViewerController extends Controller
         );
 
         $logs = $result['logs'];
-        return view('log-viewer', compact('logs', 'paginator', 'filename', 'projects'));
+
+        return view('log-viewer', compact('logs', 'paginator', 'filename', 'projects', 'search'));
     }
 
     /**
@@ -173,7 +179,7 @@ class LogViewerController extends Controller
     /**
      * Parse large log file efficiently (streaming)
      */
-    private function parseLogStream($path, $page = 1, $perPage = 10)
+    private function parseLogStream($path, $page = 1, $perPage = 10, $search = '')
     {
         $handle = fopen($path, 'r');
         if (!$handle) {
@@ -182,13 +188,17 @@ class LogViewerController extends Controller
 
         $entries = [];
         $current = null;
-        $entryCount = 0;
+
+        // Normalize search term
+        $search = trim($search);
+        $hasSearch = $search !== '';
 
         while (($line = fgets($handle)) !== false) {
             if (preg_match('/^\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\] (\w+)\.(\w+): (.*)/', $line, $m)) {
                 if ($current) {
-                    $entries[] = $current;
-                    $entryCount++;
+                    if (!$hasSearch || $this->matchesSearch($current, $search)) {
+                        $entries[] = $current;
+                    }
                 }
 
                 $current = [
@@ -204,17 +214,42 @@ class LogViewerController extends Controller
         }
 
         if ($current) {
-            $entries[] = $current;
-            $entryCount++;
+            if (!$hasSearch || $this->matchesSearch($current, $search)) {
+                $entries[] = $current;
+            }
         }
 
         fclose($handle);
+
         $entries = array_reverse($entries);
         $total = count($entries);
 
+        // Pagination
         $offset = ($page - 1) * $perPage;
         $pagedEntries = array_slice($entries, $offset, $perPage);
 
         return ['logs' => $pagedEntries, 'total' => $total];
+    }
+
+    private function matchesSearch(array $entry, string $term): bool
+    {
+        $term = strtolower($term);
+
+        if (
+            str_contains(strtolower($entry['datetime']), $term) ||
+            str_contains(strtolower($entry['environment']), $term) ||
+            str_contains(strtolower($entry['level']), $term) ||
+            str_contains(strtolower($entry['message']), $term)
+        ) {
+            return true;
+        }
+
+        foreach ($entry['trace'] as $traceLine) {
+            if (str_contains(strtolower($traceLine), $term)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

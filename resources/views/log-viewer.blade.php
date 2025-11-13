@@ -201,6 +201,23 @@
                 @endif
             </div>
 
+            <form method="GET" action="{{ route('log.viewer') }}" class="flex items-center gap-2 mb-4">
+                <input type="hidden" name="file" value="{{ request('file') }}">
+                <input
+                    type="text"
+                    name="search"
+                    placeholder="Search logs..."
+                    value="{{ $search ?? '' }}"
+                    class="border rounded px-3 py-2 text-sm w-64"
+                />
+                <button type="submit" class="bg-blue-600 text-white text-sm px-3 py-2 rounded">Search</button>
+
+                @if(!empty($search))
+                    <a href="{{ route('log.viewer', ['file' => request('file')]) }}"
+                       class="ml-2 text-sm text-gray-600 hover:underline">Clear</a>
+                @endif
+            </form>
+
             <!-- Log Entries Table -->
             <div id="tbl_log_entries">
                 @if(isset($logs) && count($logs) > 0)
